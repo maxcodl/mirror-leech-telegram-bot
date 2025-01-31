@@ -1,4 +1,4 @@
-from aiofiles.os import path as aiopath, remove, makedirs
+from aiofiles.os import path as aiopath, remove, makedirs, listdir
 from asyncio import sleep, gather
 from os import walk, path as ospath
 from secrets import token_urlsafe
@@ -586,7 +586,7 @@ class TaskConfig:
                 if (
                     is_first_archive_split(file_)
                     or is_archive(file_)
-                    and not file_.endswith(".rar")
+                    and not file_.lower().endswith(".rar")
                 ):
                     self.proceed_count += 1
                     f_path = ospath.join(dirpath, file_)
@@ -594,18 +594,14 @@ class TaskConfig:
                     if not self.is_file:
                         self.subname = file_
                     code = await sevenz.extract(f_path, t_path, pswd)
-                    if code == 0:
+            if code == 0:
+                for file_ in files:
+                    if is_archive_split(file_) or is_archive(file_):
+                        del_path = ospath.join(dirpath, file_)
                         try:
-                            await remove(f_path)
+                            await remove(del_path)
                         except:
                             self.is_cancelled = True
-            for file_ in files:
-                if is_archive_split(file_):
-                    del_path = ospath.join(dirpath, file_)
-                    try:
-                        await remove(del_path)
-                    except:
-                        self.is_cancelled = True
         return t_path if self.is_file and code == 0 else dl_path
 
     async def proceed_ffmpeg(self, dl_path, gid):
@@ -676,7 +672,7 @@ class TaskConfig:
                     if res:
                         if delete_files:
                             await remove(file_path)
-                            if len(res) == 1:
+                            if len(await listdir(new_folder)) == 1:
                                 folder = new_folder.rsplit("/", 1)[0]
                                 self.name = ospath.basename(res[0])
                                 if self.name.startswith("ffmpeg"):
@@ -691,6 +687,7 @@ class TaskConfig:
                             dl_path = new_folder
                             self.name = new_folder.rsplit("/", 1)[-1]
                     else:
+                        await move(file_path, dl_path)
                         await rmtree(new_folder)
                 else:
                     for dirpath, _, files in await sync_to_async(
